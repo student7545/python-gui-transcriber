@@ -1,0 +1,106 @@
+import tkinter as tk
+import sounddevice as sd
+import soundfile as sf
+import speech_recognition as sr
+import pyperclip
+import pyttsx3
+import datetime
+
+
+class Window:
+    def __init__(self):
+        self.win = tk.Tk()
+        self.win.geometry("900x900")
+        self.win.title("Text 2 speech,speech 2 Text")
+        self.win.configure(bg='red')
+
+        # configure the row and column weights of the root window
+        self.win.rowconfigure(0, weight=1)
+        self.win.rowconfigure(1, weight=1)
+        self.win.columnconfigure(0, weight=1)
+        self.win.columnconfigure(1, weight=1)
+
+        # Bind the Ctrl+W combination to the close_window function
+        self.win.bind("<Control-w>", self.close_window)
+
+        self.text_frame = tk.Frame(self.win)
+        self.text_frame.grid(row=0, column=0, sticky="nsew",padx=3,pady=3)
+
+        self.text_box = tk.Text(self.text_frame, height=30, bg='Black', fg='white')
+        self.text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = tk.Scrollbar(self.text_frame, command=self.text_box.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.text_box['yscrollcommand'] = self.scrollbar.set
+
+        self.recording_button = tk.Button(self.win, text="Start Recording",font="bold 18",relief="groove", command=self.start_recording, bg='grey', fg='navy')
+        self.recording_button.grid(row=0, column=1, sticky="nsew",padx=3,pady=3)
+
+        # Set focus to the recording button
+        self.recording_button.focus_set()
+
+        self.clear_button = tk.Button(self.win, text="Clear Text",font="bold 18",relief="groove", command=self.clear_text, bg='grey', fg='navy')
+        self.clear_button.grid(row=1, column=1, sticky="nsew",padx=3,pady=3)
+
+        self.engine = pyttsx3.init()
+
+        self.speech_button = tk.Button(self.win, text="Text to Speech",font="bold 18",relief="groove", command=self.text_to_speech, bg='grey', fg='Navy')
+        self.speech_button.grid(column=0,row=1,sticky="NSWE",padx=3,pady=3)
+
+        self.is_recording = False
+        self.fs = 44100
+        self.seconds = 300
+        self.filename = "output.wav"
+        self.recorder = sr.Recognizer()
+
+    def clear_text(self):
+        self.text_box.delete('1.0', tk.END)
+
+    # Define a new method to close the window
+    def close_window(self, event):
+        self.win.destroy()
+
+    def start_recording(self):
+        if not self.is_recording:
+            # Clear the text box
+            self.text_box.delete(1.0, tk.END)
+
+            self.is_recording = True
+            self.recording_button.configure(text="Stop Recording")
+            self.myrecording = sd.rec(int(self.seconds * self.fs), samplerate=self.fs, channels=2)
+        else:
+            self.is_recording = False
+            self.recording_button.configure(text="Start Recording")
+            sd.stop()
+            sf.write(self.filename, self.myrecording, self.fs)
+
+            # Transcribe the audio automatically
+            self.audio_transcriber()
+
+    def audio_transcriber(self):
+        with sr.AudioFile(self.filename) as source:
+            audio_data = self.recorder.record(source)
+            try:
+                text = self.recorder.recognize_google(audio_data)
+            except sr.UnknownValueError:
+                text = "Speech recognition could not understand audio"
+            except sr.RequestError:
+                text="Could not request results from speech recognition service!"
+
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open("text_history.txt", "a") as file:
+                file.write(timestamp + " - " + text + "\n")
+
+            self.text_box.delete('1.0',tk.END)
+            self.text_box.insert('1.0',text)
+            pyperclip.copy(text)
+    
+    def text_to_speech(self):
+        text = self.text_box.get('1.0', tk.END)
+        self.engine.say(text)
+        self.engine.runAndWait()
+
+if __name__== "__main__":
+    window = Window()
+    window.win.mainloop()
